@@ -4,7 +4,7 @@ on:
     paths:
       - '**/*.tf'
       - '*.tfvars'
-      - '.github/workflows/terraform-cicd.yaml'
+      - '.github/workflows/cicd.yaml'
 
   pull_request:
     branches:
@@ -12,7 +12,7 @@ on:
     paths:
       - '**/*.tf'
       - '*.tfvars'
-      - '.github/workflows/terraform-cicd.yaml'
+      - '.github/workflows/cicd.yaml'
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
@@ -122,8 +122,10 @@ jobs:
     name: Post-Deployment Cost Analysis and Report
     needs: apply
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout the repo
+        uses: actions/checkout@v4
 
       - name: Setup Infracost
         uses: infracost/actions/setup@v3
@@ -134,16 +136,23 @@ jobs:
                               --format=json \
                               --out-file=/tmp/post-deployment-cost.json
 
-      - name: Upload Cost Report
+      - name: Upload raw cost report artifact
         uses: actions/upload-artifact@v4
         with:
           name: post-deployment-cost
           path: /tmp/post-deployment-cost.json
 
-      - name: Send to Slack
+      - name: Format cost report for Slack
+        run: |
+          infracost output \
+            --format slack-message \
+            --path /tmp/post-deployment-cost.json \
+            --out-file /tmp/slack-message.json
+
+      - name: Send cost report to Slack
         uses: slackapi/slack-github-action@v2.1.0
         with:
-          payload-file-path: "/tmp/post-deployment-cost.json"
+          payload-file-path: "/tmp/slack-message.json"
           payload-templated: true
           webhook: ${{ secrets.SLACK_WEBHOOK }}
           webhook-type: incoming-webhook
